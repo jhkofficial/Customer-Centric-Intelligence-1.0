@@ -1,7 +1,24 @@
 // Geographic Drill-down Intelligence Dataset for Central Java (Jawa Tengah)
 // Hierarchy: Indonesia (Level 0) -> Jawa Tengah (Level 1) -> Kabupaten/Kota (Level 2) -> Kecamatan (Level 3) -> Kelurahan/Desa (Level 4)
 
-export type GeoLevel = 'country' | 'province' | 'regency' | 'district' | 'subdistrict';
+export type GeoLevel = 'country' | 'province' | 'regency' | 'district' | 'subdistrict' | 'local';
+
+export type CustomerSegmentFilter =
+  | 'ALL'
+  | 'Active Customer'
+  | 'High Value Customer'
+  | 'Medium Value Customer'
+  | 'Low Value Customer'
+  | 'At Risk Customer'
+  | 'Dormant Customer'
+  | 'Churn Customer'
+  | 'Prospect'
+  | 'New Customer'
+  | 'Loyal Customer';
+
+export type CustomerProductFilter = 'ALL' | 'BeAT' | 'Scoopy' | 'Vario' | 'PCX' | 'ADV' | 'CB150R' | 'Other';
+
+export type CustomerStatusFilter = 'ALL' | 'Active' | 'At Risk' | 'Dormant' | 'Churn' | 'Prospect';
 
 export interface MicroMarketData {
   population: number;
@@ -10,6 +27,7 @@ export interface MicroMarketData {
   atRiskCustomers: number;
   dormantCustomers: number;
   potentialCustomers: number;
+  highValueCustomers: number;
   customerDensityScore: number;
   competitorDensityScore: number;
   competitorsCount: number;
@@ -19,11 +37,32 @@ export interface MicroMarketData {
   retentionOpportunityScore: number;
   acquisitionPotentialScore: number;
   strategicLocationScore: number;
+  customerConcentrationScore: number; // 0-100 scale
   dominantSegment: string;
   avgMonthlyExpenditure: string;
   recommendedStrategy: 'RETAIN' | 'DEFEND' | 'ACQUIRE';
   strategyPriorityLabel: string;
   keyObservation: string;
+  topProduct: string;
+  customersOutsideCoverageCount: number;
+}
+
+export interface IndividualCustomerPoint {
+  id: string; // e.g. CUS-028912
+  maskedName: string;
+  lat: number;
+  lng: number;
+  segment: 'High Value' | 'Medium Value' | 'Low Value' | 'At Risk' | 'Dormant' | 'New Customer' | 'Loyal Customer';
+  status: 'Active' | 'At Risk' | 'Dormant' | 'Churn' | 'Prospect';
+  sinceYear: number;
+  lastTransactionDaysAgo: number;
+  nearestOutlet: string;
+  distanceToOutletKm: number;
+  customerValue: 'High' | 'Medium' | 'Low';
+  retentionRisk: 'Low' | 'Medium' | 'High';
+  product: 'BeAT' | 'Scoopy' | 'Vario' | 'PCX' | 'ADV' | 'CB150R' | 'Other';
+  nextBestAction: string;
+  monthlySpend: string;
 }
 
 export interface CustomerCluster {
@@ -38,6 +77,13 @@ export interface CustomerCluster {
   avgDistanceToOutletKm: number;
   opportunity: 'Low' | 'Medium' | 'High';
   recommendation: string;
+  subClusters?: Array<{
+    id: string;
+    name: string;
+    lat: number;
+    lng: number;
+    customers: number;
+  }>;
 }
 
 export interface CandidateLocationItem {
@@ -74,9 +120,11 @@ export interface GeoItem {
   polygon: [number, number][];
   strategy: 'RETAIN' | 'DEFEND' | 'ACQUIRE';
   score: number;
+  customerConcentrationScore: number;
   metrics: MicroMarketData;
   clusters?: CustomerCluster[];
   candidates?: CandidateLocationItem[];
+  customers?: IndividualCustomerPoint[];
 }
 
 export interface KecamatanItem {
@@ -90,6 +138,7 @@ export interface KecamatanItem {
   score: number;
   totalCustomers: number;
   potentialCustomers: number;
+  customerConcentrationScore: number;
   subdistricts: GeoItem[];
 }
 
@@ -104,13 +153,167 @@ export interface RegencyGeoItem {
   score: number;
   totalCustomers: number;
   activeRate: number;
+  customerConcentrationScore: number;
   districts: KecamatanItem[];
 }
 
 // -------------------------------------------------------------
+// Top Customer Areas (Compact Ranking Panel)
+// -------------------------------------------------------------
+export const TOP_CUSTOMER_AREAS = [
+  { rank: 1, name: 'Tembalang', level: 'Kelurahan', parent: 'Tembalang, Kota Semarang', customers: 4820, concentrationScore: 92, strategy: 'ACQUIRE', density: 'Very High', potential: 'High' },
+  { rank: 2, name: 'Meteseh', level: 'Kelurahan', parent: 'Tembalang, Kota Semarang', customers: 3250, concentrationScore: 84, strategy: 'ACQUIRE', density: 'High', potential: 'Very High' },
+  { rank: 3, name: 'Sendangmulyo', level: 'Kelurahan', parent: 'Tembalang, Kota Semarang', customers: 2940, concentrationScore: 88, strategy: 'DEFEND', density: 'High', potential: 'Medium' },
+  { rank: 4, name: 'Bulusan', level: 'Kelurahan', parent: 'Tembalang, Kota Semarang', customers: 2310, concentrationScore: 71, strategy: 'ACQUIRE', density: 'Medium', potential: 'High' },
+  { rank: 5, name: 'Sambiroto', level: 'Kelurahan', parent: 'Tembalang, Kota Semarang', customers: 2120, concentrationScore: 79, strategy: 'DEFEND', density: 'Medium', potential: 'Medium' }
+];
+
+// -------------------------------------------------------------
+// Anonymized Individual Customer Points (Sample in Meteseh & Tembalang)
+// -------------------------------------------------------------
+export const ANONYMIZED_CUSTOMERS_METESEH: IndividualCustomerPoint[] = [
+  {
+    id: 'CUS-028912',
+    maskedName: 'A*** P******',
+    lat: -7.0542,
+    lng: 110.4632,
+    segment: 'High Value',
+    status: 'Active',
+    sinceYear: 2023,
+    lastTransactionDaysAgo: 18,
+    nearestOutlet: 'Dealer Tembalang Motor',
+    distanceToOutletKm: 3.2,
+    customerValue: 'High',
+    retentionRisk: 'Low',
+    product: 'PCX',
+    nextBestAction: 'Maintain Engagement & Undangan Uji Emisi Gratis',
+    monthlySpend: 'Rp480.000'
+  },
+  {
+    id: 'CUS-029415',
+    maskedName: 'B*** S******',
+    lat: -7.0520,
+    lng: 110.4580,
+    segment: 'High Value',
+    status: 'Active',
+    sinceYear: 2022,
+    lastTransactionDaysAgo: 45,
+    nearestOutlet: 'Dealer Tembalang Motor',
+    distanceToOutletKm: 3.8,
+    customerValue: 'High',
+    retentionRisk: 'Low',
+    product: 'Vario',
+    nextBestAction: 'Reminder Booking Servis Berkala 12.000 KM via Mobile Apps',
+    monthlySpend: 'Rp410.000'
+  },
+  {
+    id: 'CUS-030118',
+    maskedName: 'D*** K******',
+    lat: -7.0585,
+    lng: 110.4670,
+    segment: 'At Risk',
+    status: 'At Risk',
+    sinceYear: 2021,
+    lastTransactionDaysAgo: 140,
+    nearestOutlet: 'Dealer Tembalang Motor',
+    distanceToOutletKm: 7.2,
+    customerValue: 'Medium',
+    retentionRisk: 'High',
+    product: 'BeAT',
+    nextBestAction: 'Kirim Voucher Diskon Jasa Servis 25% + Penjemputan Unit',
+    monthlySpend: 'Rp190.000'
+  },
+  {
+    id: 'CUS-031204',
+    maskedName: 'E*** R******',
+    lat: -7.0610,
+    lng: 110.4710,
+    segment: 'At Risk',
+    status: 'At Risk',
+    sinceYear: 2020,
+    lastTransactionDaysAgo: 180,
+    nearestOutlet: 'Dealer Tembalang Motor',
+    distanceToOutletKm: 8.4,
+    customerValue: 'High',
+    retentionRisk: 'High',
+    product: 'ADV',
+    nextBestAction: 'Eskalasi Layanan Servis Kunjung Wilayah Meteseh Timur',
+    monthlySpend: 'Rp520.000'
+  },
+  {
+    id: 'CUS-032890',
+    maskedName: 'F*** H******',
+    lat: -7.0490,
+    lng: 110.4615,
+    segment: 'Medium Value',
+    status: 'Active',
+    sinceYear: 2024,
+    lastTransactionDaysAgo: 22,
+    nearestOutlet: 'Dealer Tembalang Motor',
+    distanceToOutletKm: 2.9,
+    customerValue: 'Medium',
+    retentionRisk: 'Low',
+    product: 'Scoopy',
+    nextBestAction: 'Tawarkan Aksesoris Resmi Honda & Apparel',
+    monthlySpend: 'Rp280.000'
+  },
+  {
+    id: 'CUS-033140',
+    maskedName: 'G*** W******',
+    lat: -7.0560,
+    lng: 110.4690,
+    segment: 'Dormant',
+    status: 'Dormant',
+    sinceYear: 2019,
+    lastTransactionDaysAgo: 260,
+    nearestOutlet: 'Dealer Tembalang Motor',
+    distanceToOutletKm: 7.8,
+    customerValue: 'Low',
+    retentionRisk: 'High',
+    product: 'BeAT',
+    nextBestAction: 'Reaktivasi via WhatsApp Blast Promo Oli MPX2',
+    monthlySpend: 'Rp95.000'
+  },
+  {
+    id: 'CUS-034502',
+    maskedName: 'H*** M******',
+    lat: -7.0515,
+    lng: 110.4655,
+    segment: 'New Customer',
+    status: 'Active',
+    sinceYear: 2026,
+    lastTransactionDaysAgo: 8,
+    nearestOutlet: 'Dealer Tembalang Motor',
+    distanceToOutletKm: 3.5,
+    customerValue: 'High',
+    retentionRisk: 'Low',
+    product: 'PCX',
+    nextBestAction: 'Edukasi KPB 1 Gratis & Panduan Mobile Apps',
+    monthlySpend: 'Rp350.000'
+  },
+  {
+    id: 'CUS-035981',
+    maskedName: 'I*** N******',
+    lat: -7.0575,
+    lng: 110.4600,
+    segment: 'High Value',
+    status: 'Active',
+    sinceYear: 2022,
+    lastTransactionDaysAgo: 30,
+    nearestOutlet: 'Dealer Tembalang Motor',
+    distanceToOutletKm: 3.1,
+    customerValue: 'High',
+    retentionRisk: 'Low',
+    product: 'CB150R',
+    nextBestAction: 'Program Servis Prioritas Fast Pit Motor Sport',
+    monthlySpend: 'Rp490.000'
+  }
+];
+
+// -------------------------------------------------------------
 // Detailed Kelurahan Dataset for Tembalang, Semarang
 // -------------------------------------------------------------
-const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
+export const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
   {
     id: 'kel-meteseh',
     name: 'Meteseh',
@@ -128,13 +331,15 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
     ],
     strategy: 'ACQUIRE',
     score: 88,
+    customerConcentrationScore: 84,
     metrics: {
       population: 28450,
       existingCustomers: 3250,
-      activeCustomers: 2630,
+      activeCustomers: 2180,
       atRiskCustomers: 620,
       dormantCustomers: 310,
       potentialCustomers: 1480,
+      highValueCustomers: 480,
       customerDensityScore: 84,
       competitorDensityScore: 68,
       competitorsCount: 7,
@@ -144,38 +349,54 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
       retentionOpportunityScore: 78,
       acquisitionPotentialScore: 94,
       strategicLocationScore: 90,
+      customerConcentrationScore: 84,
       dominantSegment: 'Emerging Affluent & Mahasiswa',
       avgMonthlyExpenditure: 'Rp3,65 Juta',
       recommendedStrategy: 'ACQUIRE',
       strategyPriorityLabel: 'ACQUIRE PRIORITY',
-      keyObservation: 'Pertumbuhan perumahan baru & kavling padat dengan penetrasi jaringan layanan resmi yang masih minim.'
+      keyObservation: 'Pertumbuhan perumahan baru & kavling padat dengan penetrasi jaringan layanan resmi yang masih minim.',
+      topProduct: 'Honda BeAT (44%) & PCX 160 (28%)',
+      customersOutsideCoverageCount: 1240
     },
     clusters: [
       {
-        id: 'clu-meteseh-a',
-        name: 'Kluster Perumahan Dinar Elok & Bukit Kencana',
+        id: 'clu-meteseh-01',
+        name: 'Kluster 01 — Dinar Mas & Bukit Kencana',
         lat: -7.0512,
         lng: 110.4610,
-        customers: 1420,
+        customers: 820,
         dominantSegment: 'Active High Value',
         retentionRisk: 'Low',
-        riskPercent: 12,
-        avgDistanceToOutletKm: 4.8,
+        riskPercent: 11,
+        avgDistanceToOutletKm: 4.2,
         opportunity: 'Medium',
         recommendation: 'Layanan Service Kunjung & Booking Mobile Apps Fast Track'
       },
       {
-        id: 'clu-meteseh-b',
-        name: 'Kluster Koridor Sigar Bencah - Rowosari',
-        lat: -7.0610,
-        lng: 110.4695,
-        customers: 980,
+        id: 'clu-meteseh-02',
+        name: 'Kluster 02 — Koridor Sigar Bencah',
+        lat: -7.0560,
+        lng: 110.4640,
+        customers: 640,
         dominantSegment: 'Komuter Produktif',
-        retentionRisk: 'High',
-        riskPercent: 42,
-        avgDistanceToOutletKm: 8.3,
+        retentionRisk: 'Medium',
+        riskPercent: 28,
+        avgDistanceToOutletKm: 5.1,
         opportunity: 'High',
-        recommendation: 'Retention Campaign & Pos Satelit Servis Cepat'
+        recommendation: 'Kandidat Outlet Satelit Baru CL-017'
+      },
+      {
+        id: 'clu-meteseh-03',
+        name: 'Kluster 03 — Perbatasan Rowosari Timur',
+        lat: -7.0630,
+        lng: 110.4710,
+        customers: 420,
+        dominantSegment: 'At-Risk Komuter',
+        retentionRisk: 'High',
+        riskPercent: 44,
+        avgDistanceToOutletKm: 7.8,
+        opportunity: 'High',
+        recommendation: 'Coverage Gap! 420 pelanggan berjarak > 7 km dari outlet terdekat'
       }
     ],
     candidates: [
@@ -198,10 +419,11 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
         projectedAnnualRevenue: 'Rp3,4 Miliar',
         cannibalizationRisk: 'Rendah (4%)',
         address: 'Jl. Sigar Bencah Raya No. 45, Meteseh, Tembalang',
-        whyThisLocation: 'Titik temu arteri komuter Tembalang timur dengan populasi perumahan berkembang pesat, bebas kanibalisasi outlet existing.',
+        whyThisLocation: 'Titik temu arteri komuter Tembalang timur dengan 1.240 pelanggan di luar cakupan servis optimal.',
         recommendedFormat: 'Dealer 3S Compact / Satelit Express Pit'
       }
-    ]
+    ],
+    customers: ANONYMIZED_CUSTOMERS_METESEH
   },
   {
     id: 'kel-sendangmulyo',
@@ -219,13 +441,15 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
     ],
     strategy: 'DEFEND',
     score: 86,
+    customerConcentrationScore: 88,
     metrics: {
       population: 34200,
-      existingCustomers: 4120,
-      activeCustomers: 3340,
-      atRiskCustomers: 780,
-      dormantCustomers: 420,
+      existingCustomers: 2940,
+      activeCustomers: 2340,
+      atRiskCustomers: 480,
+      dormantCustomers: 320,
       potentialCustomers: 1250,
+      highValueCustomers: 520,
       customerDensityScore: 88,
       competitorDensityScore: 74,
       competitorsCount: 9,
@@ -235,94 +459,19 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
       retentionOpportunityScore: 84,
       acquisitionPotentialScore: 82,
       strategicLocationScore: 87,
+      customerConcentrationScore: 88,
       dominantSegment: 'Family Households & Komuter Industri',
       avgMonthlyExpenditure: 'Rp3,40 Juta',
       recommendedStrategy: 'DEFEND',
       strategyPriorityLabel: 'DEFEND PRIORITY',
-      keyObservation: 'Basis pelanggan loyal tinggi yang mulai dipenetrasi oleh 9 bengkel non-resmi & kompetitor.'
-    },
-    clusters: [
-      {
-        id: 'clu-sendangmulyo-a',
-        name: 'Kluster Klipang Raya & Perumnas Sendangmulyo',
-        lat: -7.0360,
-        lng: 110.4680,
-        customers: 2150,
-        dominantSegment: 'Family Households',
-        retentionRisk: 'Medium',
-        riskPercent: 24,
-        avgDistanceToOutletKm: 3.5,
-        opportunity: 'Medium',
-        recommendation: 'Program Loyalitas Poin & Promo Servis Berkala Akhir Pekan'
-      }
-    ],
-    candidates: [
-      {
-        id: 'cand-cl018',
-        code: 'CL-018',
-        name: 'Kandidat Point Klipang Boulevard',
-        kelurahan: 'Sendangmulyo',
-        kecamatan: 'Tembalang',
-        kabupaten: 'Kota Semarang',
-        lat: -7.0375,
-        lng: 110.4650,
-        customerDensityScore: 88,
-        marketPotential: 86,
-        accessibility: 90,
-        acquisitionPotential: 84,
-        competitionPressure: 72,
-        strategicLocationScore: 88,
-        estimatedCapex: 'Rp720 Juta',
-        projectedAnnualRevenue: 'Rp2,9 Miliar',
-        cannibalizationRisk: 'Sedang (12%)',
-        address: 'Jl. Klipang Raya No. 12, Sendangmulyo',
-        whyThisLocation: 'Kepadatan populasi perumahan tertinggi di Tembalang utara dengan akses jalan lebar.',
-        recommendedFormat: 'Bengkel Resmi Dealer (H23) & Spare Part Center'
-      }
-    ]
-  },
-  {
-    id: 'kel-kedungmundu',
-    name: 'Kedungmundu',
-    level: 'subdistrict',
-    parentName: 'Tembalang',
-    grandParentName: 'Kota Semarang',
-    center: [-7.0242, 110.4552],
-    zoom: 14.5,
-    polygon: [
-      [-7.0150, 110.4460],
-      [-7.0140, 110.4630],
-      [-7.0340, 110.4650],
-      [-7.0350, 110.4480]
-    ],
-    strategy: 'RETAIN',
-    score: 82,
-    metrics: {
-      population: 22100,
-      existingCustomers: 2890,
-      activeCustomers: 2480,
-      atRiskCustomers: 410,
-      dormantCustomers: 260,
-      potentialCustomers: 1100,
-      customerDensityScore: 81,
-      competitorDensityScore: 60,
-      competitorsCount: 5,
-      existingOutletCoverage: 'Optimal (2,1 km)',
-      avgDistanceToOutletKm: 2.1,
-      marketPotentialScore: 83,
-      retentionOpportunityScore: 88,
-      acquisitionPotentialScore: 78,
-      strategicLocationScore: 83,
-      dominantSegment: 'Pegawai & Sentra Pendidikan Swasta',
-      avgMonthlyExpenditure: 'Rp3,80 Juta',
-      recommendedStrategy: 'RETAIN',
-      strategyPriorityLabel: 'RETAIN FOCUS',
-      keyObservation: 'Pelanggan memiliki kedekatan jarak yang baik dengan outlet, butuh retensi berkala garansi oli.'
+      keyObservation: 'Basis pelanggan loyal tinggi yang mulai dipenetrasi oleh 9 bengkel non-resmi & kompetitor.',
+      topProduct: 'Honda Vario 160 (38%) & BeAT (36%)',
+      customersOutsideCoverageCount: 680
     }
   },
   {
     id: 'kel-tembalang-core',
-    name: 'Tembalang (Pusat Kampus)',
+    name: 'Tembalang',
     level: 'subdistrict',
     parentName: 'Tembalang',
     grandParentName: 'Kota Semarang',
@@ -336,13 +485,15 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
     ],
     strategy: 'ACQUIRE',
     score: 93,
+    customerConcentrationScore: 92,
     metrics: {
       population: 31800,
-      existingCustomers: 3840,
-      activeCustomers: 3450,
+      existingCustomers: 4820,
+      activeCustomers: 4120,
       atRiskCustomers: 390,
       dormantCustomers: 180,
       potentialCustomers: 2100,
+      highValueCustomers: 890,
       customerDensityScore: 92,
       competitorDensityScore: 78,
       competitorsCount: 11,
@@ -352,65 +503,14 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
       retentionOpportunityScore: 86,
       acquisitionPotentialScore: 96,
       strategicLocationScore: 94,
+      customerConcentrationScore: 92,
       dominantSegment: 'Mahasiswa, Dosen & Komersial Kampus',
       avgMonthlyExpenditure: 'Rp3,95 Juta',
       recommendedStrategy: 'ACQUIRE',
       strategyPriorityLabel: 'ACQUIRE PRIORITY',
-      keyObservation: 'Siklus pergantian unit motor tinggi tiap tahun ajaran baru; volume servis rutin harian sangat padat.'
-    },
-    clusters: [
-      {
-        id: 'clu-undip-hub',
-        name: 'Kluster Sentra Kos Prof Soedarto',
-        lat: -7.0465,
-        lng: 110.4420,
-        customers: 2400,
-        dominantSegment: 'Gen-Z Mahasiswa',
-        retentionRisk: 'Low',
-        riskPercent: 9,
-        avgDistanceToOutletKm: 1.1,
-        opportunity: 'High',
-        recommendation: 'Aktivasi Booth Kampus & Paket Servis Mahasiswa'
-      }
-    ]
-  },
-  {
-    id: 'kel-kramas',
-    name: 'Kramas',
-    level: 'subdistrict',
-    parentName: 'Tembalang',
-    grandParentName: 'Kota Semarang',
-    center: [-7.0620, 110.4370],
-    zoom: 14.5,
-    polygon: [
-      [-7.0560, 110.4280],
-      [-7.0550, 110.4440],
-      [-7.0720, 110.4460],
-      [-7.0730, 110.4290]
-    ],
-    strategy: 'RETAIN',
-    score: 76,
-    metrics: {
-      population: 14200,
-      existingCustomers: 1650,
-      activeCustomers: 1440,
-      atRiskCustomers: 210,
-      dormantCustomers: 130,
-      potentialCustomers: 820,
-      customerDensityScore: 75,
-      competitorDensityScore: 45,
-      competitorsCount: 3,
-      existingOutletCoverage: 'Cukup (2,8 km)',
-      avgDistanceToOutletKm: 2.8,
-      marketPotentialScore: 78,
-      retentionOpportunityScore: 82,
-      acquisitionPotentialScore: 74,
-      strategicLocationScore: 77,
-      dominantSegment: 'Residensial Sub-urban',
-      avgMonthlyExpenditure: 'Rp3,10 Juta',
-      recommendedStrategy: 'RETAIN',
-      strategyPriorityLabel: 'RETAIN FOCUS',
-      keyObservation: 'Zona pemukiman tenang di jalur lingkar Tembalang, loyalitas stabil.'
+      keyObservation: 'Siklus pergantian unit motor tinggi tiap tahun ajaran baru; volume servis rutin harian sangat padat.',
+      topProduct: 'Honda Scoopy (42%) & Vario (31%)',
+      customersOutsideCoverageCount: 180
     }
   },
   {
@@ -429,13 +529,15 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
     ],
     strategy: 'ACQUIRE',
     score: 80,
+    customerConcentrationScore: 71,
     metrics: {
       population: 17800,
-      existingCustomers: 2100,
-      activeCustomers: 1760,
-      atRiskCustomers: 340,
-      dormantCustomers: 190,
+      existingCustomers: 2310,
+      activeCustomers: 1860,
+      atRiskCustomers: 290,
+      dormantCustomers: 160,
       potentialCustomers: 950,
+      highValueCustomers: 310,
       customerDensityScore: 79,
       competitorDensityScore: 52,
       competitorsCount: 4,
@@ -445,11 +547,14 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
       retentionOpportunityScore: 79,
       acquisitionPotentialScore: 84,
       strategicLocationScore: 81,
+      customerConcentrationScore: 71,
       dominantSegment: 'Residensial Menengah & Kost Eksekutif',
       avgMonthlyExpenditure: 'Rp3,35 Juta',
       recommendedStrategy: 'ACQUIRE',
       strategyPriorityLabel: 'ACQUIRE OPPORTUNITY',
-      keyObservation: 'Area perluasan hunian dengan kepemilikan rata-rata 1,8 unit motor per keluarga.'
+      keyObservation: 'Area perluasan hunian dengan kepemilikan rata-rata 1,8 unit motor per keluarga.',
+      topProduct: 'Honda BeAT (40%) & Scoopy (35%)',
+      customersOutsideCoverageCount: 390
     }
   },
   {
@@ -468,13 +573,15 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
     ],
     strategy: 'DEFEND',
     score: 86,
+    customerConcentrationScore: 79,
     metrics: {
       population: 26500,
-      existingCustomers: 3420,
-      activeCustomers: 2830,
-      atRiskCustomers: 590,
-      dormantCustomers: 310,
+      existingCustomers: 2120,
+      activeCustomers: 1730,
+      atRiskCustomers: 270,
+      dormantCustomers: 120,
       potentialCustomers: 1320,
+      highValueCustomers: 290,
       customerDensityScore: 85,
       competitorDensityScore: 65,
       competitorsCount: 6,
@@ -484,11 +591,14 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
       retentionOpportunityScore: 85,
       acquisitionPotentialScore: 86,
       strategicLocationScore: 86,
-      dominantSegment: 'Keluarga Muda & Sentra Niaga Jalan Sambiroto',
+      customerConcentrationScore: 79,
+      dominantSegment: 'Keluarga Muda & Sentra Niaga',
       avgMonthlyExpenditure: 'Rp3,50 Juta',
       recommendedStrategy: 'DEFEND',
       strategyPriorityLabel: 'DEFEND PRIORITY',
-      keyObservation: 'Koridor arteri penghubung Tembalang - Pedurungan dengan arus mobilitas padat.'
+      keyObservation: 'Koridor arteri penghubung Tembalang - Pedurungan dengan arus mobilitas padat.',
+      topProduct: 'Honda Vario (46%)',
+      customersOutsideCoverageCount: 210
     }
   }
 ];
@@ -496,7 +606,7 @@ const TEMBALANG_SUBDISTRICTS: GeoItem[] = [
 // -------------------------------------------------------------
 // Detailed Kecamatan Dataset for Kota Semarang
 // -------------------------------------------------------------
-const SEMARANG_KECAMATAN: KecamatanItem[] = [
+export const SEMARANG_KECAMATAN: KecamatanItem[] = [
   {
     id: 'kec-tembalang',
     name: 'Tembalang',
@@ -511,6 +621,7 @@ const SEMARANG_KECAMATAN: KecamatanItem[] = [
     ],
     strategy: 'ACQUIRE',
     score: 89,
+    customerConcentrationScore: 91,
     totalCustomers: 21320,
     potentialCustomers: 9020,
     subdistricts: TEMBALANG_SUBDISTRICTS
@@ -529,88 +640,10 @@ const SEMARANG_KECAMATAN: KecamatanItem[] = [
     ],
     strategy: 'DEFEND',
     score: 88,
+    customerConcentrationScore: 87,
     totalCustomers: 24500,
     potentialCustomers: 8100,
-    subdistricts: [
-      {
-        id: 'kel-srondol-wetan',
-        name: 'Srondol Wetan',
-        level: 'subdistrict',
-        parentName: 'Banyumanik',
-        grandParentName: 'Kota Semarang',
-        center: [-7.0650, 110.4180],
-        zoom: 14.5,
-        polygon: [
-          [-7.0550, 110.4080],
-          [-7.0540, 110.4280],
-          [-7.0740, 110.4300],
-          [-7.0750, 110.4070]
-        ],
-        strategy: 'DEFEND',
-        score: 87,
-        metrics: {
-          population: 24100,
-          existingCustomers: 3120,
-          activeCustomers: 2600,
-          atRiskCustomers: 520,
-          dormantCustomers: 270,
-          potentialCustomers: 1150,
-          customerDensityScore: 86,
-          competitorDensityScore: 68,
-          competitorsCount: 6,
-          existingOutletCoverage: 'Optimal (1,8 km)',
-          avgDistanceToOutletKm: 1.8,
-          marketPotentialScore: 87,
-          retentionOpportunityScore: 85,
-          acquisitionPotentialScore: 84,
-          strategicLocationScore: 86,
-          dominantSegment: 'High Value Family',
-          avgMonthlyExpenditure: 'Rp4,10 Juta',
-          recommendedStrategy: 'DEFEND',
-          strategyPriorityLabel: 'DEFEND PRIORITY',
-          keyObservation: 'Basis konsumen mapan di koridor Jl. Setiabudi dengan rata-rata belanja tinggi.'
-        }
-      },
-      {
-        id: 'kel-pudakpayung',
-        name: 'Pudakpayung',
-        level: 'subdistrict',
-        parentName: 'Banyumanik',
-        grandParentName: 'Kota Semarang',
-        center: [-7.0980, 110.4150],
-        zoom: 14.5,
-        polygon: [
-          [-7.0850, 110.4020],
-          [-7.0840, 110.4280],
-          [-7.1120, 110.4300],
-          [-7.1130, 110.4000]
-        ],
-        strategy: 'ACQUIRE',
-        score: 84,
-        metrics: {
-          population: 29800,
-          existingCustomers: 2950,
-          activeCustomers: 2380,
-          atRiskCustomers: 570,
-          dormantCustomers: 310,
-          potentialCustomers: 1650,
-          customerDensityScore: 81,
-          competitorDensityScore: 55,
-          competitorsCount: 5,
-          existingOutletCoverage: 'Celah Jarak (5,2 km)',
-          avgDistanceToOutletKm: 5.2,
-          marketPotentialScore: 86,
-          retentionOpportunityScore: 80,
-          acquisitionPotentialScore: 89,
-          strategicLocationScore: 85,
-          dominantSegment: 'Komuter Perbatasan Ungaran',
-          avgMonthlyExpenditure: 'Rp3,30 Juta',
-          recommendedStrategy: 'ACQUIRE',
-          strategyPriorityLabel: 'ACQUIRE OPPORTUNITY',
-          keyObservation: 'Gerbang selatan kota Semarang dengan arus komuter padat menuju kawasan industri Ungaran.'
-        }
-      }
-    ]
+    subdistricts: []
   },
   {
     id: 'kec-pedurungan',
@@ -626,49 +659,10 @@ const SEMARANG_KECAMATAN: KecamatanItem[] = [
     ],
     strategy: 'DEFEND',
     score: 91,
+    customerConcentrationScore: 93,
     totalCustomers: 28900,
     potentialCustomers: 7400,
-    subdistricts: [
-      {
-        id: 'kel-tlogosari-kulon',
-        name: 'Tlogosari Kulon',
-        level: 'subdistrict',
-        parentName: 'Pedurungan',
-        grandParentName: 'Kota Semarang',
-        center: [-6.9850, 110.4650],
-        zoom: 14.5,
-        polygon: [
-          [-6.9760, 110.4550],
-          [-6.9750, 110.4750],
-          [-6.9940, 110.4760],
-          [-6.9950, 110.4540]
-        ],
-        strategy: 'DEFEND',
-        score: 92,
-        metrics: {
-          population: 36500,
-          existingCustomers: 4850,
-          activeCustomers: 4020,
-          atRiskCustomers: 830,
-          dormantCustomers: 410,
-          potentialCustomers: 1380,
-          customerDensityScore: 94,
-          competitorDensityScore: 82,
-          competitorsCount: 12,
-          existingOutletCoverage: 'Tinggi (1,5 km)',
-          avgDistanceToOutletKm: 1.5,
-          marketPotentialScore: 92,
-          retentionOpportunityScore: 88,
-          acquisitionPotentialScore: 85,
-          strategicLocationScore: 91,
-          dominantSegment: 'Urban Commercial & High Density Housing',
-          avgMonthlyExpenditure: 'Rp3,75 Juta',
-          recommendedStrategy: 'DEFEND',
-          strategyPriorityLabel: 'DEFEND CORE',
-          keyObservation: 'Kawasan pemukiman terbesar dengan konsentrasi motor matic tertinggi di Semarang Timur.'
-        }
-      }
-    ]
+    subdistricts: []
   },
   {
     id: 'kec-semarang-tengah',
@@ -684,66 +678,9 @@ const SEMARANG_KECAMATAN: KecamatanItem[] = [
     ],
     strategy: 'RETAIN',
     score: 87,
+    customerConcentrationScore: 85,
     totalCustomers: 18400,
     potentialCustomers: 3200,
-    subdistricts: [
-      {
-        id: 'kel-pekuanden',
-        name: 'Pekunden (Simpang Lima)',
-        level: 'subdistrict',
-        parentName: 'Semarang Tengah',
-        grandParentName: 'Kota Semarang',
-        center: [-6.9904, 110.4229],
-        zoom: 14.5,
-        polygon: [
-          [-6.9820, 110.4150],
-          [-6.9810, 110.4300],
-          [-6.9980, 110.4320],
-          [-6.9990, 110.4140]
-        ],
-        strategy: 'RETAIN',
-        score: 88,
-        metrics: {
-          population: 15400,
-          existingCustomers: 2600,
-          activeCustomers: 2150,
-          atRiskCustomers: 450,
-          dormantCustomers: 280,
-          potentialCustomers: 650,
-          customerDensityScore: 86,
-          competitorDensityScore: 75,
-          competitorsCount: 8,
-          existingOutletCoverage: 'Optimal (<1 km)',
-          avgDistanceToOutletKm: 0.8,
-          marketPotentialScore: 82,
-          retentionOpportunityScore: 92,
-          acquisitionPotentialScore: 71,
-          strategicLocationScore: 85,
-          dominantSegment: 'Pekerja Kantor & Bisnis Komersial',
-          avgMonthlyExpenditure: 'Rp4,80 Juta',
-          recommendedStrategy: 'RETAIN',
-          strategyPriorityLabel: 'RETAIN FOCUS',
-          keyObservation: 'Penetrasi pasar telah jenuh; fokus utama adalah retensi pelanggan premium korporat & fast pit service.'
-        }
-      }
-    ]
-  },
-  {
-    id: 'kec-ngaliyan',
-    name: 'Ngaliyan',
-    regencyName: 'Kota Semarang',
-    center: [-7.0050, 110.3550],
-    zoom: 13,
-    polygon: [
-      [-6.9750, 110.3250],
-      [-6.9720, 110.3800],
-      [-7.0420, 110.3820],
-      [-7.0450, 110.3220]
-    ],
-    strategy: 'ACQUIRE',
-    score: 87,
-    totalCustomers: 22100,
-    potentialCustomers: 7800,
     subdistricts: []
   }
 ];
@@ -766,6 +703,7 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'DEFEND',
     score: 92,
+    customerConcentrationScore: 95,
     totalCustomers: 124800,
     activeRate: 82.4,
     districts: SEMARANG_KECAMATAN
@@ -784,68 +722,10 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'DEFEND',
     score: 88,
+    customerConcentrationScore: 89,
     totalCustomers: 68400,
     activeRate: 79.5,
-    districts: [
-      {
-        id: 'kec-banjarsari',
-        name: 'Banjarsari',
-        regencyName: 'Kota Surakarta',
-        center: [-7.5400, 110.8250],
-        zoom: 13.5,
-        polygon: [
-          [-7.5200, 110.8100],
-          [-7.5180, 110.8450],
-          [-7.5550, 110.8420],
-          [-7.5560, 110.8080]
-        ],
-        strategy: 'DEFEND',
-        score: 89,
-        totalCustomers: 26500,
-        potentialCustomers: 6200,
-        subdistricts: [
-          {
-            id: 'kel-manahan',
-            name: 'Manahan',
-            level: 'subdistrict',
-            parentName: 'Banjarsari',
-            grandParentName: 'Kota Surakarta',
-            center: [-7.5520, 110.8080],
-            zoom: 14.5,
-            polygon: [
-              [-7.5450, 110.8000],
-              [-7.5440, 110.8160],
-              [-7.5600, 110.8170],
-              [-7.5610, 110.7990]
-            ],
-            strategy: 'DEFEND',
-            score: 88,
-            metrics: {
-              population: 18900,
-              existingCustomers: 2800,
-              activeCustomers: 2320,
-              atRiskCustomers: 480,
-              dormantCustomers: 290,
-              potentialCustomers: 920,
-              customerDensityScore: 87,
-              competitorDensityScore: 71,
-              competitorsCount: 7,
-              existingOutletCoverage: 'Optimal (1,4 km)',
-              avgDistanceToOutletKm: 1.4,
-              marketPotentialScore: 88,
-              retentionOpportunityScore: 86,
-              acquisitionPotentialScore: 82,
-              strategicLocationScore: 87,
-              dominantSegment: 'Urban Sports & Lifestyle',
-              avgMonthlyExpenditure: 'Rp3,90 Juta',
-              recommendedStrategy: 'DEFEND',
-              strategyPriorityLabel: 'DEFEND PRIORITY',
-              keyObservation: 'Sentra kegiatan olahraga & komersial kota Solo dengan lalu lintas harian tinggi.'
-            }
-          }
-        ]
-      }
-    ]
+    districts: []
   },
   {
     id: 'reg-banyumas',
@@ -861,68 +741,10 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'ACQUIRE',
     score: 86,
+    customerConcentrationScore: 86,
     totalCustomers: 74200,
     activeRate: 81.2,
-    districts: [
-      {
-        id: 'kec-purwokerto-utara',
-        name: 'Purwokerto Utara',
-        regencyName: 'Banyumas',
-        center: [-7.4025, 109.2458],
-        zoom: 13.5,
-        polygon: [
-          [-7.3850, 109.2300],
-          [-7.3820, 109.2650],
-          [-7.4220, 109.2620],
-          [-7.4250, 109.2280]
-        ],
-        strategy: 'ACQUIRE',
-        score: 89,
-        totalCustomers: 18400,
-        potentialCustomers: 7200,
-        subdistricts: [
-          {
-            id: 'kel-grendeng',
-            name: 'Grendeng (Kampus UNSOED)',
-            level: 'subdistrict',
-            parentName: 'Purwokerto Utara',
-            grandParentName: 'Banyumas',
-            center: [-7.4060, 109.2490],
-            zoom: 14.5,
-            polygon: [
-              [-7.3980, 109.2400],
-              [-7.3970, 109.2580],
-              [-7.4140, 109.2590],
-              [-7.4150, 109.2390]
-            ],
-            strategy: 'ACQUIRE',
-            score: 91,
-            metrics: {
-              population: 21500,
-              existingCustomers: 2750,
-              activeCustomers: 2390,
-              atRiskCustomers: 360,
-              dormantCustomers: 190,
-              potentialCustomers: 1540,
-              customerDensityScore: 88,
-              competitorDensityScore: 58,
-              competitorsCount: 5,
-              existingOutletCoverage: 'Sedang (2,8 km)',
-              avgDistanceToOutletKm: 2.8,
-              marketPotentialScore: 92,
-              retentionOpportunityScore: 82,
-              acquisitionPotentialScore: 93,
-              strategicLocationScore: 90,
-              dominantSegment: 'Mahasiswa Unsoed & Pegawai Kampus',
-              avgMonthlyExpenditure: 'Rp3,25 Juta',
-              recommendedStrategy: 'ACQUIRE',
-              strategyPriorityLabel: 'ACQUIRE PRIORITY',
-              keyObservation: 'Pusat pertumbuhan pendidikan tinggi Banyumas dengan kebutuhan mobilitas roda dua yang sangat dominan.'
-            }
-          }
-        ]
-      }
-    ]
+    districts: []
   },
   {
     id: 'reg-kudus',
@@ -938,68 +760,10 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'RETAIN',
     score: 84,
+    customerConcentrationScore: 82,
     totalCustomers: 59300,
     activeRate: 76.8,
-    districts: [
-      {
-        id: 'kec-kudus-kota',
-        name: 'Kudus Kota',
-        regencyName: 'Kudus',
-        center: [-6.8080, 110.8420],
-        zoom: 13.5,
-        polygon: [
-          [-6.7900, 110.8250],
-          [-6.7880, 110.8600],
-          [-6.8250, 110.8580],
-          [-6.8260, 110.8230]
-        ],
-        strategy: 'RETAIN',
-        score: 86,
-        totalCustomers: 19200,
-        potentialCustomers: 4100,
-        subdistricts: [
-          {
-            id: 'kel-demaan',
-            name: 'Demaan',
-            level: 'subdistrict',
-            parentName: 'Kudus Kota',
-            grandParentName: 'Kudus',
-            center: [-6.8060, 110.8380],
-            zoom: 14.5,
-            polygon: [
-              [-6.7980, 110.8300],
-              [-6.7970, 110.8460],
-              [-6.8140, 110.8470],
-              [-6.8150, 110.8290]
-            ],
-            strategy: 'RETAIN',
-            score: 85,
-            metrics: {
-              population: 16800,
-              existingCustomers: 2450,
-              activeCustomers: 1890,
-              atRiskCustomers: 560,
-              dormantCustomers: 340,
-              potentialCustomers: 680,
-              customerDensityScore: 82,
-              competitorDensityScore: 66,
-              competitorsCount: 6,
-              existingOutletCoverage: 'Optimal (1,1 km)',
-              avgDistanceToOutletKm: 1.1,
-              marketPotentialScore: 81,
-              retentionOpportunityScore: 89,
-              acquisitionPotentialScore: 73,
-              strategicLocationScore: 83,
-              dominantSegment: 'Sentra Niaga & Industri Rokok',
-              avgMonthlyExpenditure: 'Rp3,60 Juta',
-              recommendedStrategy: 'RETAIN',
-              strategyPriorityLabel: 'RETAIN FOCUS',
-              keyObservation: 'Penurunan keaktifan berkala pasca 24 bulan; membutuhkan insentif oli dan servis loyalitas.'
-            }
-          }
-        ]
-      }
-    ]
+    districts: []
   },
   {
     id: 'reg-kota-magelang',
@@ -1015,6 +779,7 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'RETAIN',
     score: 83,
+    customerConcentrationScore: 80,
     totalCustomers: 38200,
     activeRate: 77.2,
     districts: []
@@ -1033,6 +798,7 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'DEFEND',
     score: 85,
+    customerConcentrationScore: 83,
     totalCustomers: 44500,
     activeRate: 78.4,
     districts: []
@@ -1051,6 +817,7 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'ACQUIRE',
     score: 84,
+    customerConcentrationScore: 81,
     totalCustomers: 49800,
     activeRate: 80.1,
     districts: []
@@ -1069,6 +836,7 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'ACQUIRE',
     score: 83,
+    customerConcentrationScore: 82,
     totalCustomers: 78900,
     activeRate: 78.9,
     districts: []
@@ -1087,6 +855,7 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'DEFEND',
     score: 86,
+    customerConcentrationScore: 84,
     totalCustomers: 41200,
     activeRate: 80.5,
     districts: []
@@ -1105,6 +874,7 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'DEFEND',
     score: 87,
+    customerConcentrationScore: 86,
     totalCustomers: 61200,
     activeRate: 81.0,
     districts: []
@@ -1123,6 +893,7 @@ export const JAWA_TENGAH_REGENCIES: RegencyGeoItem[] = [
     ],
     strategy: 'RETAIN',
     score: 81,
+    customerConcentrationScore: 78,
     totalCustomers: 58400,
     activeRate: 77.8,
     districts: []
@@ -1143,6 +914,7 @@ export function searchGeoIndex(query: string) {
     regencyName?: string;
     districtName?: string;
     subdistrictName?: string;
+    segmentFilter?: CustomerSegmentFilter;
   }> = [];
 
   // Match Province
@@ -1156,22 +928,27 @@ export function searchGeoIndex(query: string) {
     });
   }
 
+  // Handle Intent Search e.g. "high value" or "at risk"
+  const isHighValueIntent = q.includes('high') || q.includes('value');
+  const isAtRiskIntent = q.includes('risk') || q.includes('risiko');
+
   // Match Regencies
   JAWA_TENGAH_REGENCIES.forEach((reg) => {
-    if (reg.name.toLowerCase().includes(q)) {
+    if (reg.name.toLowerCase().includes(q) || (isHighValueIntent && reg.name.toLowerCase().includes('semarang'))) {
       results.push({
         type: 'Kabupaten/Kota',
         name: reg.name,
         hierarchy: `Jawa Tengah > ${reg.name}`,
         center: reg.center,
         zoom: reg.zoom,
-        regencyName: reg.name
+        regencyName: reg.name,
+        segmentFilter: isHighValueIntent ? 'High Value Customer' : isAtRiskIntent ? 'At Risk Customer' : undefined
       });
     }
 
     // Match Districts
     reg.districts.forEach((dist) => {
-      if (dist.name.toLowerCase().includes(q)) {
+      if (dist.name.toLowerCase().includes(q) || (isHighValueIntent && dist.name.toLowerCase().includes('tembalang'))) {
         results.push({
           type: 'Kecamatan',
           name: dist.name,
@@ -1179,7 +956,8 @@ export function searchGeoIndex(query: string) {
           center: dist.center,
           zoom: dist.zoom,
           regencyName: reg.name,
-          districtName: dist.name
+          districtName: dist.name,
+          segmentFilter: isHighValueIntent ? 'High Value Customer' : isAtRiskIntent ? 'At Risk Customer' : undefined
         });
       }
 
@@ -1232,30 +1010,30 @@ export function generateAIMapInsight(
 ) {
   if (level === 'subdistrict' && metrics) {
     return {
-      title: `Analisis Spasial Mikro: Kelurahan ${name}`,
-      headline: `${name} memiliki potensi ${metrics.potentialCustomers.toLocaleString('id-ID')} pelanggan baru dengan penetrasi layanan ${metrics.existingOutletCoverage.toLowerCase()}.`,
+      title: `Analisis Sebaran Pelanggan: Kelurahan ${name}`,
+      headline: `${name} memiliki ${metrics.existingCustomers.toLocaleString('id-ID')} pelanggan terdaftar dengan konsentrasi tinggi (${metrics.customerConcentrationScore}/100) dan ${metrics.customersOutsideCoverageCount} pelanggan di luar jangkauan servis optimal.`,
       bullets: [
-        `Rasio Pelanggan Aktif: ${Math.round((metrics.activeCustomers / metrics.existingCustomers) * 100)}% dari total ${metrics.existingCustomers.toLocaleString('id-ID')} pelanggan terdaftar.`,
-        `Tekanan Kompetitor: ${metrics.competitorsCount} titik bengkel/jaringan kompetitor aktif dalam radius operasional.`,
-        `Jarak Rata-rata ke Outlet: ${metrics.avgDistanceToOutletKm} km (Ambang batas ideal servis cepat: < 3,0 km).`,
-        `Rekomendasi Strategi: SERVEON mengidentifikasi wilayah ini sebagai prioritas ${metrics.strategyPriorityLabel}.`
+        `Distribusi Segmen: ${metrics.highValueCustomers.toLocaleString('id-ID')} pelanggan High-Value (${Math.round((metrics.highValueCustomers / metrics.existingCustomers) * 100)}%), ${metrics.activeCustomers.toLocaleString('id-ID')} Aktif, dan ${metrics.atRiskCustomers.toLocaleString('id-ID')} Berisiko Churn.`,
+        `Hubungan Outlet & Coverage: Jarak rata-rata menuju outlet resmi terdekat adalah ${metrics.avgDistanceToOutletKm} km dengan 7 bengkel kompetitor di koridor utama.`,
+        `Produk Terpopuler: ${metrics.topProduct}. Model matic 160cc mendominasi area hunian Dinar Elok & Sigar Bencah.`,
+        `Coverage Gap: 1.240 pelanggan terdeteksi berjarak > 5 KM dari outlet resmi.`
       ],
       aiRecommendation:
         metrics.recommendedStrategy === 'ACQUIRE'
-          ? `Lakukan penetrasi agresif melalui ekspansi format Satelit Service / Fast Pit atau kemitraan mobile service untuk mengonversi 1.480 prospek sebelum diambil alih kompetitor.`
+          ? `Konsentrasi pelanggan baru tinggi (1.480 prospek) namun cakupan servis rendah. SERVEON merekomendasikan ekspansi titik Satelit / Mobile Service Kunjung di Meteseh Timur.`
           : metrics.recommendedStrategy === 'DEFEND'
-          ? `Perkuat retensi loyalitas pelanggan lama melalui program gratis general check-up dan booking prioritas via Mobile Apps guna membendung 9 titik bengkel kompetitor di sekitar perumahan.`
+          ? `Perkuat retensi 520 pelanggan High-Value melalui booking prioritas Mobile Apps untuk membendung ekspansi 9 kompetitor di sekitar Klipang Sendangmulyo.`
           : `Gencarkan program reaktivasi pelanggan dormant dengan voucher oli MPX2 dan notifikasi pengingat servis otomatis via WhatsApp Mobile Apps.`
     };
   }
 
   if (level === 'district') {
     return {
-      title: `Analisis Tingkat Kecamatan: ${name}`,
-      headline: `Kecamatan ${name} merepresentasikan koridor pertumbuhan utama dengan konsentrasi mobilitas komuter dan sentra pendidikan/pemukiman.`,
+      title: `Analisis Konsentrasi Pelanggan: Kecamatan ${name}`,
+      headline: `Konsentrasi pelanggan tertinggi terkonsentrasi di Tembalang (4.820) dan Meteseh (3.250). Sekitar 42% pelanggan High-Value berada di tiga Kelurahan utama.`,
       bullets: [
-        `Terdapat kelurahan dengan disparitas penetrasi outlet signifikan antara area barat dan timur.`,
-        `Rekomendasi drill-down: Klik pada kelurahan spesifik (seperti Meteseh atau Sendangmulyo) untuk memeriksa data mikro pasar dan titik kandidat.`
+        `Disparitas Aksesibilitas: Wilayah barat memiliki waktu tempuh < 8 menit ke outlet, sedangkan wilayah timur (Meteseh & Rowosari) > 18 menit.`,
+        `Pola Produk: Honda Vario & PCX mendominasi pemukiman keluarga, sedangkan Honda Scoopy & BeAT dominan di sentra kampus UNDIP.`
       ],
       aiRecommendation: `Prioritaskan alokasi armada servis kunjung dan pertimbangkan penambahan titik layanan mandiri di kelurahan dengan jarak ke outlet > 4,0 km.`
     };
@@ -1263,22 +1041,22 @@ export function generateAIMapInsight(
 
   if (level === 'regency') {
     return {
-      title: `Ringkasan Spasial: ${name}`,
-      headline: `${name} memiliki pangsa pasar stabil namun membutuhkan optimalisasi jaringan di sub-urban berkembang.`,
+      title: `Ringkasan Sebaran Pelanggan: ${name}`,
+      headline: `${name} memiliki total 124.800 pelanggan terdaftar dengan tingkat keaktifan 82,4%. Koridor timur dan selatan merupakan pusat pertumbuhan terkuat.`,
       bullets: [
-        `Tingkat keaktifan rata-rata kabupaten/kota: ${metrics ? metrics.activeCustomers : '80,4'}%.`,
-        `Gunakan filter strategi untuk membedakan antara kluster pertahanan pasar vs. peluang akuisisi putih.`
+        `Tingkat konsentrasi pelanggan regional: Skor 95/100 dengan kepadatan tertinggi di Semarang Timur, Pedurungan, dan Tembalang.`,
+        `Gunakan filter Customer Segment untuk melihat sebaran spesifik High-Value vs At-Risk.`
       ],
-      aiRecommendation: `Pilih salah satu Kecamatan di atas peta untuk membuka detail analitik mikro hingga tingkat Kelurahan/Desa.`
+      aiRecommendation: `Pilih salah satu Kecamatan di atas peta untuk membuka detail analitik mikro hingga tingkat Kelurahan dan kluster pelanggan.`
     };
   }
 
   return {
-    title: 'SERVEON Intelijen Spasial Jawa Tengah',
-    headline: 'Eksplorasi hierarkis 35 Kabupaten/Kota: dari peta makro regional hingga intelijen mikro tingkat Kelurahan dan titik kandidat.',
+    title: 'SERVEON Intelijen Sebaran Pelanggan Jawa Tengah',
+    headline: 'Eksplorasi hierarkis 35 Kabupaten/Kota: dari konsentrasi makro regional hingga kluster pelanggan dan titik individual teranonimkan.',
     bullets: [
-      'Pilih salah satu Kabupaten/Kota atau cari nama lokasi untuk memulai penelusuran.',
-      'Aktifkan layer spasial untuk melihat densitas, kompetitor, dan zonasi prioritas.'
+      'Gunakan mode Customer Distribution Heatmap untuk melihat densitas secara instan.',
+      'Filter berdasarkan Segmen Pelanggan, Status, atau Model Unit Motor Honda.'
     ],
     aiRecommendation: 'Klik langsung pada batas poligon wilayah di peta untuk melakukan zoom in otomatis.'
   };
