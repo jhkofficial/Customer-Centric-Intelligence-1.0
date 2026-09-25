@@ -1,0 +1,6 @@
+{
+  "name": "SERVEON",
+  "description": "Platform Intelijen Pelanggan, Lokasi, dan Engagement bertenaga AI untuk optimalisasi keputusan strategis wilayah Jawa Tengah.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
