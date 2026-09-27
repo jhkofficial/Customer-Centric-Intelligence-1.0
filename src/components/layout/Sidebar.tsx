@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   LayoutDashboard,
   UserCheck,
@@ -30,6 +30,7 @@ import {
   Maximize2
 } from 'lucide-react';
 import { ScreenId, UserRole } from '../../types';
+import { OrchestrationSubmenuId } from '../../types/orchestration';
 
 export type SidebarMode = 'expanded' | 'compact' | 'hidden';
 
@@ -40,6 +41,8 @@ interface SidebarProps {
   onSetSidebarMode: (mode: SidebarMode) => void;
   userRole: UserRole;
   onLogout?: () => void;
+  activeOrchestrationSubmenu?: OrchestrationSubmenuId;
+  onSelectOrchestrationSubmenu?: (sub: OrchestrationSubmenuId) => void;
 }
 
 interface NavItem {
@@ -62,17 +65,17 @@ export const NAV_GROUPS: NavGroup[] = [
     ]
   },
   {
-    label: 'INTELIJEN PELANGGAN',
+    label: 'PELANGGAN',
     items: [
-      { id: 'pelanggan-360', label: 'Pelanggan 360', icon: UserCheck, rolesAllowed: ['Executive / Management', 'Business / Marketing', 'Data Analyst / Data Scientist', 'Administrator', 'Security / Data Governance', 'Regional / Branch Operations'] },
+      { id: 'pelanggan-360', label: 'Pelanggan 360°', icon: UserCheck },
       { id: 'segmentasi-pelanggan', label: 'Segmentasi Pelanggan', icon: PieChart },
       { id: 'distribusi-pelanggan', label: 'Distribusi Pelanggan', icon: Users }
     ]
   },
   {
-    label: 'INTELIJEN LOKASI',
+    label: 'SPASIAL & PASAR',
     items: [
-      { id: 'peta-kepadatan', label: 'Peta & Kepadatan', icon: Map },
+      { id: 'peta-kepadatan', label: 'Peta Kepadatan', icon: Map },
       { id: 'jaringan-cakupan', label: 'Jaringan & Cakupan', icon: Network },
       { id: 'pasar-poi-demografi', label: 'Pasar, POI & Demografi', icon: Building2 }
     ]
@@ -198,38 +201,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 const isActive = currentScreen === item.id;
 
                 return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      if (allowed) onSelectScreen(item.id);
-                    }}
-                    disabled={!allowed}
-                    title={
-                      !allowed
-                        ? `${item.label} (Terkunci untuk role ${userRole})`
-                        : item.label
-                    }
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left relative ${
-                      isActive
-                        ? 'bg-[#2563EB] text-white shadow-sm font-semibold'
-                        : allowed
-                        ? 'text-slate-300 hover:bg-[#1C4160] hover:text-white'
-                        : 'text-slate-500 opacity-50 cursor-not-allowed'
-                    } ${isCollapsed ? 'justify-center px-0' : ''}`}
-                  >
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : allowed ? 'text-slate-400' : 'text-slate-600'}`} />
-                    {!isCollapsed && (
-                      <span className="truncate flex-1">{item.label}</span>
-                    )}
-                    {!isCollapsed && !allowed && (
-                      <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    )}
-                    {item.id === 'login' && !isCollapsed && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-200 font-bold uppercase">
-                        Menu
-                      </span>
-                    )}
-                  </button>
+                  <div key={item.id} className="space-y-0.5">
+                    <button
+                      onClick={() => {
+                        if (!allowed) return;
+                        onSelectScreen(item.id);
+                      }}
+                      disabled={!allowed}
+                      title={
+                        !allowed
+                          ? `${item.label} (Terkunci untuk role ${userRole})`
+                          : item.label
+                      }
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left relative ${
+                        isActive
+                          ? 'bg-[#2563EB] text-white shadow-sm font-semibold'
+                          : allowed
+                          ? 'text-slate-300 hover:bg-[#1C4160] hover:text-white'
+                          : 'text-slate-500 opacity-50 cursor-not-allowed'
+                      } ${isCollapsed ? 'justify-center px-0' : ''}`}
+                    >
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : allowed ? 'text-slate-400' : 'text-slate-600'}`} />
+                      {!isCollapsed && (
+                        <span className="truncate flex-1">{item.label}</span>
+                      )}
+                      {!isCollapsed && !allowed && (
+                        <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      )}
+                      {item.id === 'login' && !isCollapsed && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-200 font-bold uppercase">
+                          Menu
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -258,26 +263,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Mode Toggle Bar: Expanded <-> Compact <-> Hidden */}
         <div className="flex items-center justify-between pt-1">
+          <button
+            onClick={() => onSetSidebarMode(isCollapsed ? 'expanded' : 'compact')}
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] text-slate-400 hover:text-white hover:bg-[#1C4160] rounded-lg transition-colors"
+            title={isCollapsed ? 'Perlebar Sidebar' : 'Ciutkan Sidebar'}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="w-4 h-4" />
+            ) : (
+              <>
+                <ChevronLeft className="w-4 h-4" />
+                <span>Ciutkan</span>
+              </>
+            )}
+          </button>
           {!isCollapsed && (
             <button
               onClick={() => onSetSidebarMode('hidden')}
-              className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 px-1 py-1"
-              title="Buka Halaman Penuh Tanpa Menu"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-[#1C4160] rounded-lg transition-colors ml-1"
+              title="Sembunyikan Sidebar"
             >
-              <Maximize2 className="w-3.5 h-3.5" />
-              <span>Layar Penuh</span>
+              <PanelLeftClose className="w-4 h-4" />
             </button>
           )}
-
-          <button
-            onClick={() => onSetSidebarMode(isCollapsed ? 'expanded' : 'compact')}
-            className={`p-2 text-slate-400 hover:text-white hover:bg-[#1C4160] rounded-lg transition-colors focus:outline-none ${
-              isCollapsed ? 'w-full flex justify-center' : 'ml-auto'
-            }`}
-            title={isCollapsed ? 'Perluas Menu (Expanded)' : 'Ciutkan Menu (Compact)'}
-          >
-            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          </button>
         </div>
       </div>
     </aside>

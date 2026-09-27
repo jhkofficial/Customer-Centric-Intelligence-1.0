@@ -29,11 +29,13 @@ import { AuditGovernanceScreen } from './screens/AuditGovernanceScreen';
 import { AdministrationScreen } from './screens/AdministrationScreen';
 
 import { ScreenId, UserRole } from './types';
+import { OrchestrationSubmenuId } from './types/orchestration';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('login');
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>('Administrator');
+  const [activeOrchestrationSubmenu, setActiveOrchestrationSubmenu] = useState<OrchestrationSubmenuId>('overview');
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('expanded');
 
   // Global Context Filter State
@@ -201,6 +203,7 @@ export default function App() {
           <CampaignOmnichannelScreen
             onNavigateToScreen={setCurrentScreen}
             onShowToast={showToast}
+            initialSubmenu={activeOrchestrationSubmenu}
           />
         );
       case 'aktivitas-hasil':
@@ -259,6 +262,8 @@ export default function App() {
         onSetSidebarMode={setSidebarMode}
         userRole={currentUserRole}
         onLogout={handleLogout}
+        activeOrchestrationSubmenu={activeOrchestrationSubmenu}
+        onSelectOrchestrationSubmenu={setActiveOrchestrationSubmenu}
       />
 
       {/* Main Content Area - Expands to 100% Full Width when sidebar is hidden */}
